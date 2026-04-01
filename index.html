@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Clinical Assistant</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #0d1117 100%);
+            color: #e0e6ed;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ─── HEADER ─────────────────────────────────────── */
+        .header {
+            background: rgba(15, 20, 45, 0.85);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(0, 210, 211, 0.15);
+            padding: 14px 28px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .header-left { display: flex; align-items: center; gap: 12px; }
+        .logo-icon {
+            width: 38px; height: 38px;
+            background: linear-gradient(135deg, #00d2d3, #0abde3);
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px;
+            box-shadow: 0 4px 15px rgba(0, 210, 211, 0.3);
+        }
+        .header h1 {
+            font-size: 18px; font-weight: 600;
+            background: linear-gradient(90deg, #00d2d3, #54a0ff);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .header-right { display: flex; align-items: center; gap: 16px; }
+        .status-badge {
+            display: flex; align-items: center; gap: 8px;
+            padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: 500;
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+        }
+        .status-dot {
+            width: 8px; height: 8px; border-radius: 50%; background: #ff6b6b;
+            transition: background 0.3s;
+        }
+        .status-dot.connected { background: #00d2d3; box-shadow: 0 0 10px rgba(0,210,211,0.5); animation: pulse 2s infinite; }
+        .status-dot.processing { background: #feca57; animation: pulse 1s infinite; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        .timer { font-size: 13px; font-weight: 500; color: #8395a7; font-variant-numeric: tabular-nums; }
+        .btn-history-toggle {
+            padding: 6px 14px; border-radius: 8px; border: 1px solid rgba(84,160,255,0.3);
+            background: rgba(84,160,255,0.1); color: #54a0ff; font-size: 12px; font-weight: 500;
+            cursor: pointer; font-family: 'Inter', sans-serif; transition: all 0.2s;
+        }
+        .btn-history-toggle:hover { background: rgba(84,160,255,0.2); }
+
+        /* ─── MAIN LAYOUT ────────────────────────────────── */
+        .app-wrapper { display: flex; height: calc(100vh - 62px); }
+        .main-container {
+            display: grid; grid-template-columns: 1fr 1fr;
+            gap: 20px; padding: 20px 24px; flex: 1; overflow: hidden;
+        }
+
+        /* ─── GLASS PANELS ───────────────────────────────── */
+        .panel {
+            background: rgba(20, 25, 55, 0.6);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 16px;
+            display: flex; flex-direction: column;
+            overflow: hidden; transition: border-color 0.3s;
+        }
+        .panel:hover { border-color: rgba(0,210,211,0.15); }
+        .panel-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .panel-title { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        .panel-body { flex: 1; padding: 16px 20px; overflow-y: auto; }
+
+        /* ─── TRANSCRIPT ─────────────────────────────────── */
+        .transcript-line {
+            padding: 8px 12px; margin-bottom: 6px;
+            background: rgba(255,255,255,0.03); border-radius: 8px;
+            font-size: 13px; line-height: 1.6;
+            border-left: 3px solid #00d2d3;
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+        .transcript-empty, .rx-empty {
+            color: #576574; font-style: italic; text-align: center;
+            padding: 40px 0; font-size: 13px;
+        }
+        .rx-empty .icon { font-size: 42px; margin-bottom: 12px; opacity: 0.3; }
+
+        /* ─── CONTROLS ───────────────────────────────────── */
+        .controls {
+            padding: 16px 20px;
+            border-top: 1px solid rgba(255,255,255,0.06);
+            display: flex; gap: 10px; justify-content: center;
+        }
+        .btn {
+            padding: 10px 22px; border: none; border-radius: 10px;
+            font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600;
+            cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 6px;
+        }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .btn-record { background: linear-gradient(135deg,#00d2d3,#0abde3); color: #0a0e27; box-shadow: 0 4px 15px rgba(0,210,211,0.25); }
+        .btn-record:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,210,211,0.4); }
+        .btn-stop { background: linear-gradient(135deg,#ff6b6b,#ee5a24); color: #fff; box-shadow: 0 4px 15px rgba(255,107,107,0.25); }
+        .btn-stop:hover:not(:disabled) { transform: translateY(-2px); }
+        .btn-approve { background: linear-gradient(135deg,#00d2d3,#1dd1a1); color: #0a0e27; }
+        .btn-approve:hover:not(:disabled) { box-shadow: 0 6px 20px rgba(0,210,211,0.4); transform: translateY(-2px); }
+        .btn-edit { background: linear-gradient(135deg,#feca57,#ff9f43); color: #0a0e27; }
+        .btn-edit:hover:not(:disabled) { box-shadow: 0 6px 20px rgba(254,202,87,0.4); transform: translateY(-2px); }
+        .btn-reject { background: linear-gradient(135deg,#ff6b6b,#ee5a24); color: #fff; }
+        .btn-reject:hover:not(:disabled) { box-shadow: 0 6px 20px rgba(255,107,107,0.4); transform: translateY(-2px); }
+
+        /* ─── PRESCRIPTION ───────────────────────────────── */
+        .rx-section { margin-bottom: 16px; }
+        .rx-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.2px; color: #00d2d3; margin-bottom: 6px; }
+        .rx-content { font-size: 13px; line-height: 1.6; color: #c8d6e5; }
+        .rx-list { list-style: none; padding: 0; }
+        .rx-list li {
+            padding: 6px 10px; margin-bottom: 4px;
+            background: rgba(255,255,255,0.03); border-radius: 6px;
+            font-size: 13px; display: flex; align-items: center; gap: 6px;
+        }
+        .rx-list li::before { content: "•"; color: #00d2d3; font-weight: bold; }
+        .med-table { width: 100%; border-collapse: separate; border-spacing: 0 3px; }
+        .med-table th { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #8395a7; text-align: left; padding: 6px 10px; }
+        .med-table td { padding: 8px 10px; background: rgba(255,255,255,0.03); font-size: 12px; }
+        .med-table tr td:first-child { border-radius: 6px 0 0 6px; font-weight: 500; color: #00d2d3; }
+        .med-table tr td:last-child { border-radius: 0 6px 6px 0; }
+        .editable { outline: none; border: 1px solid transparent; border-radius: 4px; padding: 1px 4px; transition: all 0.2s; }
+        .edit-mode .editable { border-color: rgba(254,202,87,0.4); background: rgba(254,202,87,0.05); }
+        .edit-mode .editable:focus { border-color: #feca57; background: rgba(254,202,87,0.1); }
+
+        /* ─── SUGGESTIONS ────────────────────────────────── */
+        .suggestions-bar { padding: 12px 20px; border-top: 1px solid rgba(255,255,255,0.06); }
+        .suggestions-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #54a0ff; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+        .suggestion-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+        .chip {
+            padding: 5px 12px; background: rgba(84,160,255,0.1);
+            border: 1px solid rgba(84,160,255,0.2); border-radius: 16px;
+            font-size: 11px; color: #54a0ff; cursor: default; transition: all 0.2s;
+        }
+
+        /* ─── APPROVAL ───────────────────────────────────── */
+        .approval-bar { padding: 16px 20px; border-top: 1px solid rgba(255,255,255,0.06); display: flex; gap: 10px; justify-content: center; }
+        .stamp-approved {
+            text-align: center; padding: 12px; color: #1dd1a1;
+            font-weight: 700; font-size: 16px; letter-spacing: 2px;
+            border: 3px solid #1dd1a1; border-radius: 10px;
+            text-transform: uppercase; animation: stampIn 0.4s ease;
+        }
+        @keyframes stampIn { from{transform:scale(1.5);opacity:0} to{transform:scale(1);opacity:1} }
+
+        /* ─── HISTORY SIDEBAR ────────────────────────────── */
+        .history-sidebar {
+            width: 0; overflow: hidden; transition: width 0.3s ease;
+            background: rgba(12, 15, 40, 0.95); backdrop-filter: blur(20px);
+            border-left: 1px solid rgba(255,255,255,0.06);
+            display: flex; flex-direction: column;
+        }
+        .history-sidebar.open { width: 340px; }
+        .history-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .history-header h3 { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        .history-close {
+            width: 28px; height: 28px; border-radius: 6px; border: none;
+            background: rgba(255,255,255,0.05); color: #8395a7;
+            cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center;
+        }
+        .history-close:hover { background: rgba(255,107,107,0.2); color: #ff6b6b; }
+        .history-list { flex: 1; padding: 12px; overflow-y: auto; }
+        .history-card {
+            padding: 12px 14px; margin-bottom: 8px;
+            background: rgba(255,255,255,0.03); border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.06);
+            cursor: pointer; transition: all 0.2s;
+        }
+        .history-card:hover { border-color: rgba(0,210,211,0.3); background: rgba(0,210,211,0.05); }
+        .history-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+        .history-card-id { font-size: 11px; color: #8395a7; }
+        .history-card-status {
+            font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+            padding: 2px 8px; border-radius: 10px;
+        }
+        .history-card-status.approved { background: rgba(29,209,161,0.15); color: #1dd1a1; }
+        .history-card-status.pending { background: rgba(254,202,87,0.15); color: #feca57; }
+        .history-card-status.rejected { background: rgba(255,107,107,0.15); color: #ff6b6b; }
+        .history-card-summary { font-size: 12px; color: #c8d6e5; line-height: 1.4; }
+        .history-card-date { font-size: 10px; color: #576574; margin-top: 6px; }
+        .history-empty { color: #576574; font-style: italic; text-align: center; padding: 40px 12px; font-size: 13px; }
+
+        /* ─── SPINNER ────────────────────────────────────── */
+        .spinner {
+            display: inline-block; width: 18px; height: 18px;
+            border: 2px solid rgba(0,210,211,0.2); border-top-color: #00d2d3;
+            border-radius: 50%; animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to{transform:rotate(360deg)} }
+
+        @media (max-width: 900px) {
+            .main-container { grid-template-columns: 1fr; }
+            .history-sidebar.open { width: 280px; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+    <div class="header-left">
+        <div class="logo-icon">🩺</div>
+        <h1>AI Clinical Assistant</h1>
+    </div>
+    <div class="header-right">
+        <span class="timer" id="timer">00:00</span>
+        <div class="status-badge">
+            <span class="status-dot" id="statusDot"></span>
+            <span id="statusText">Ready</span>
+        </div>
+        <button class="btn-history-toggle" onclick="toggleHistory()">📂 History</button>
+    </div>
+</div>
+
+<!-- App Wrapper -->
+<div class="app-wrapper">
+
+    <!-- Main Content -->
+    <div class="main-container">
+
+        <!-- Left: Transcript Panel -->
+        <div class="panel">
+            <div class="panel-header">
+                <div class="panel-title">🎙️ Live Transcript</div>
+                <div id="recordingIndicator" style="display:none; color:#00d2d3; font-size:11px; display:flex; align-items:center; gap:6px;">
+                    <span class="status-dot connected"></span> Listening...
+                </div>
+            </div>
+            <div class="panel-body" id="transcriptPanel">
+                <div class="transcript-empty" id="transcriptEmpty">
+                    Click "Start Consultation" to begin listening...
+                </div>
+            </div>
+            <div class="controls">
+                <button class="btn btn-record" id="recordBtn" onclick="startRecording()">🎙️ Start Consultation</button>
+                <button class="btn btn-stop" id="stopBtn" onclick="stopRecording()" disabled>⏹️ End Consultation</button>
+            </div>
+        </div>
+
+        <!-- Right: Prescription Panel -->
+        <div class="panel" id="rxPanel">
+            <div class="panel-header">
+                <div class="panel-title">📋 AI Prescription</div>
+                <div id="rxStatus"></div>
+            </div>
+            <div class="panel-body" id="rxBody">
+                <div class="rx-empty" id="rxEmpty">
+                    <div class="icon">💊</div>
+                    AI will generate a prescription<br>when the consultation ends.
+                </div>
+                <div id="rxContent" style="display:none;"></div>
+            </div>
+            <div class="suggestions-bar" id="suggestionsBar" style="display:none;">
+                <div class="suggestions-label">🤖 AI Suggestions for Doctor</div>
+                <div class="suggestion-chips" id="suggestionChips"></div>
+            </div>
+            <div class="approval-bar" id="approvalBar" style="display:none;">
+                <button class="btn btn-approve" onclick="approvePrescription()">✅ Approve</button>
+                <button class="btn btn-edit" onclick="toggleEdit()">✏️ Edit</button>
+                <button class="btn btn-reject" onclick="rejectPrescription()">❌ Reject</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- History Sidebar -->
+    <div class="history-sidebar" id="historySidebar">
+        <div class="history-header">
+            <h3>📂 Patient History</h3>
+            <button class="history-close" onclick="toggleHistory()">✕</button>
+        </div>
+        <div class="history-list" id="historyList">
+            <div class="history-empty">No consultations yet.</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let ws, mediaRecorder, timerInterval;
+    let seconds = 0;
+    let currentPrescription = null;
+    let currentConsultationId = null;
+    let isEditMode = false;
+
+    const $ = id => document.getElementById(id);
+
+    function updateStatus(text, dotClass) {
+        $('statusText').innerText = text;
+        $('statusDot').className = 'status-dot ' + (dotClass || '');
+    }
+
+    function startTimer() {
+        seconds = 0;
+        timerInterval = setInterval(() => {
+            seconds++;
+            const m = String(Math.floor(seconds / 60)).padStart(2, '0');
+            const s = String(seconds % 60).padStart(2, '0');
+            $('timer').innerText = `${m}:${s}`;
+        }, 1000);
+    }
+
+    function stopTimer() { clearInterval(timerInterval); }
+
+    async function startRecording() {
+        // Reset UI
+        $('transcriptPanel').querySelectorAll('.transcript-line').forEach(el => el.remove());
+        $('transcriptEmpty').style.display = 'block';
+        $('rxEmpty').style.display = 'block';
+        $('rxContent').style.display = 'none';
+        $('suggestionsBar').style.display = 'none';
+        $('approvalBar').style.display = 'none';
+        $('rxStatus').innerHTML = '';
+        currentPrescription = null;
+        currentConsultationId = null;
+        isEditMode = false;
+
+        updateStatus('Connecting...', 'processing');
+
+        let stream;
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1 } });
+        } catch (err) {
+            updateStatus('Microphone denied!', '');
+            return;
+        }
+
+        ws = new WebSocket(`ws://${window.location.host}/listen`);
+
+        ws.onopen = () => {
+            updateStatus('Recording...', 'connected');
+            $('recordBtn').disabled = true;
+            $('stopBtn').disabled = false;
+            $('recordingIndicator').style.display = 'flex';
+            startTimer();
+
+            mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+            mediaRecorder.addEventListener('dataavailable', e => {
+                if (e.data.size > 0 && ws.readyState === WebSocket.OPEN) ws.send(e.data);
+            });
+            mediaRecorder.start(250);
+        };
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === "transcript") {
+                $('transcriptEmpty').style.display = 'none';
+                const div = document.createElement('div');
+                div.className = 'transcript-line';
+                div.textContent = data.text;
+                $('transcriptPanel').appendChild(div);
+                $('transcriptPanel').scrollTop = $('transcriptPanel').scrollHeight;
+            } else if (data.type === "status") {
+                updateStatus(data.text, 'processing');
+                $('rxStatus').innerHTML = `<span class="spinner"></span> <span style="font-size:12px; color:#feca57; margin-left:8px;">${data.text}</span>`;
+            } else if (data.type === "error") {
+                updateStatus('Error generating prescription', '');
+                $('rxStatus').innerHTML = `<span style="color:#ff6b6b; font-size:12px;">❌ Error</span>`;
+                $('rxEmpty').style.display = 'block';
+                $('rxEmpty').innerHTML = `<div class="icon">⚠️</div>
+                    <div style="color:#ff6b6b; margin-bottom:8px;">${data.text}</div>
+                    <button class="btn btn-record" style="font-size:11px; padding:6px 12px; margin:0 auto;" onclick="retryManualGeneration()">
+                        🔄 Retry Analysis
+                    </button>`;
+            } else if (data.type === "prescription") {
+                currentConsultationId = data.consultation_id || null;
+                renderPrescription(data.data);
+            }
+        };
+
+        ws.onclose = () => {
+            if (!currentPrescription) updateStatus('Disconnected', '');
+            $('recordBtn').disabled = false;
+            $('stopBtn').disabled = true;
+            $('recordingIndicator').style.display = 'none';
+            stopTimer();
+            cleanupMedia();
+        };
+
+        ws.onerror = () => updateStatus('Connection error!', '');
+    }
+
+    function stopRecording() {
+        updateStatus('Generating prescription...', 'processing');
+        $('rxStatus').innerHTML = '<span class="spinner"></span>';
+        cleanupMedia();
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send("stop");
+            $('stopBtn').disabled = true;
+        }
+        stopTimer();
+    }
+
+    function cleanupMedia() {
+        if (mediaRecorder && mediaRecorder.state !== "inactive") {
+            mediaRecorder.stop();
+            mediaRecorder.stream.getTracks().forEach(t => t.stop());
+        }
+    }
+
+    function renderPrescription(data) {
+        $('rxStatus').innerHTML = '';
+        updateStatus('Prescription ready', 'connected');
+        $('rxEmpty').style.display = 'none';
+        $('rxContent').style.display = 'block';
+        currentPrescription = data;
+
+        if (typeof data === 'string') {
+            $('rxContent').innerHTML = `<div class="rx-section"><div class="rx-content">${data.replace(/\n/g, '<br>')}</div></div>`;
+            $('approvalBar').style.display = 'flex';
+            return;
+        }
+
+        let html = '';
+        if (data.patient_summary) {
+            html += `<div class="rx-section"><div class="rx-label">Patient Summary</div>
+                <div class="rx-content editable" contenteditable="false">${data.patient_summary}</div></div>`;
+        }
+        if (data.symptoms?.length) {
+            html += `<div class="rx-section"><div class="rx-label">Symptoms</div>
+                <ul class="rx-list">${data.symptoms.map(s => `<li><span class="editable" contenteditable="false">${s}</span></li>`).join('')}</ul></div>`;
+        }
+        if (data.diagnosis) {
+            html += `<div class="rx-section"><div class="rx-label">Diagnosis</div>
+                <div class="rx-content editable" contenteditable="false" style="font-weight:600;color:#00d2d3;font-size:15px;">${data.diagnosis}</div></div>`;
+        }
+        if (data.medications?.length) {
+            html += `<div class="rx-section"><div class="rx-label">Medications</div>
+                <table class="med-table"><thead><tr><th>Drug</th><th>Dose</th><th>Frequency</th><th>Duration</th></tr></thead><tbody>
+                ${data.medications.map(m => `<tr>
+                    <td><span class="editable" contenteditable="false">${m.name}</span></td>
+                    <td><span class="editable" contenteditable="false">${m.dosage}</span></td>
+                    <td><span class="editable" contenteditable="false">${m.frequency}</span></td>
+                    <td><span class="editable" contenteditable="false">${m.duration}</span></td>
+                </tr>`).join('')}</tbody></table></div>`;
+        }
+        if (data.advice?.length) {
+            html += `<div class="rx-section"><div class="rx-label">Advice</div>
+                <ul class="rx-list">${data.advice.map(a => `<li><span class="editable" contenteditable="false">${a}</span></li>`).join('')}</ul></div>`;
+        }
+        $('rxContent').innerHTML = html;
+
+        if (data.ai_suggestions?.length) {
+            $('suggestionsBar').style.display = 'block';
+            $('suggestionChips').innerHTML = data.ai_suggestions.map(s => `<div class="chip">💡 ${s}</div>`).join('');
+        }
+        $('approvalBar').style.display = 'flex';
+    }
+
+    function toggleEdit() {
+        isEditMode = !isEditMode;
+        const editables = document.querySelectorAll('.editable');
+        if (isEditMode) {
+            $('rxPanel').classList.add('edit-mode');
+            editables.forEach(el => el.contentEditable = 'true');
+            updateStatus('Edit mode — modify then Approve', 'processing');
+        } else {
+            $('rxPanel').classList.remove('edit-mode');
+            editables.forEach(el => el.contentEditable = 'false');
+            updateStatus('Prescription ready', 'connected');
+        }
+    }
+
+    async function approvePrescription() {
+        try {
+            const res = await fetch('/approve-prescription', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    consultation_id: currentConsultationId || 0,
+                    prescription: currentPrescription,
+                    doctor_notes: ''
+                })
+            });
+            const result = await res.json();
+            if (result.message) {
+                $('approvalBar').innerHTML = '<div class="stamp-approved">✅ APPROVED</div>';
+                updateStatus('Prescription approved!', 'connected');
+                document.querySelectorAll('.editable').forEach(el => el.contentEditable = 'false');
+                $('rxPanel').classList.remove('edit-mode');
+                loadHistory();
+            }
+        } catch (err) { console.error("Approval error:", err); }
+    }
+
+    function rejectPrescription() {
+        $('rxContent').style.display = 'none';
+        $('rxEmpty').style.display = 'block';
+        $('rxEmpty').innerHTML = '<div class="icon">🔄</div>Prescription rejected.<br>Start a new consultation.';
+        $('suggestionsBar').style.display = 'none';
+        $('approvalBar').style.display = 'none';
+        currentPrescription = null;
+        updateStatus('Rejected', '');
+    }
+
+    /* ─── HISTORY ────────────────────────────────────── */
+    function toggleHistory() {
+        const sidebar = $('historySidebar');
+        sidebar.classList.toggle('open');
+        if (sidebar.classList.contains('open')) loadHistory();
+    }
+
+    async function loadHistory() {
+        try {
+            const res = await fetch('/history');
+            const data = await res.json();
+            const list = $('historyList');
+
+            if (!data.consultations || data.consultations.length === 0) {
+                list.innerHTML = '<div class="history-empty">No consultations yet.</div>';
+                return;
+            }
+
+            list.innerHTML = data.consultations.map(c => {
+                const rx = typeof c.prescription === 'object' ? c.prescription : {};
+                const summary = rx.patient_summary || rx.diagnosis || 'Consultation';
+                const date = new Date(c.created_at).toLocaleString();
+                return `<div class="history-card" onclick="viewConsultation(${c.id})">
+                    <div class="history-card-top">
+                        <span class="history-card-id">#${c.id}</span>
+                        <span class="history-card-status ${c.status}">${c.status}</span>
+                    </div>
+                    <div class="history-card-summary">${summary}</div>
+                    <div class="history-card-date">${date}</div>
+                </div>`;
+            }).join('');
+        } catch (err) { console.error("History error:", err); }
+    }
+
+    async function viewConsultation(id) {
+        try {
+            const res = await fetch(`/history/${id}`);
+            const data = await res.json();
+            if (data.consultation) {
+                const c = data.consultation;
+                // Show transcript
+                $('transcriptPanel').querySelectorAll('.transcript-line').forEach(el => el.remove());
+                $('transcriptEmpty').style.display = 'none';
+                if (c.transcript) {
+                    const div = document.createElement('div');
+                    div.className = 'transcript-line';
+                    div.textContent = c.transcript;
+                    $('transcriptPanel').appendChild(div);
+                }
+                // Show prescription
+                if (c.prescription) {
+                    currentConsultationId = c.id;
+                    renderPrescription(c.prescription);
+                    if (c.status === 'approved') {
+                        $('approvalBar').innerHTML = '<div class="stamp-approved">✅ APPROVED</div>';
+                        updateStatus(`Viewing #${c.id} — Approved`, 'connected');
+                    } else {
+                        updateStatus(`Viewing #${c.id}`, 'connected');
+                    }
+                }
+            }
+        } catch (err) { console.error("View error:", err); }
+    }
+
+    async function retryManualGeneration() {
+        const transcriptLines = document.querySelectorAll('.transcript-line');
+        const fullText = Array.from(transcriptLines).map(el => el.textContent).join(' ');
+        
+        if (!fullText.trim()) {
+            alert("No transcript found to analyze.");
+            return;
+        }
+
+        $('rxEmpty').style.display = 'none';
+        $('rxStatus').innerHTML = '<span class="spinner"></span> <span style="font-size:11px;">Retrying...</span>';
+        
+        try {
+            const res = await fetch('/generate-prescription', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: fullText })
+            });
+            const data = await res.json();
+            if (data.prescription) {
+                renderPrescription(data.prescription);
+            } else if (data.error) {
+                $('rxEmpty').style.display = 'block';
+                $('rxEmpty').innerHTML = `<div class="icon">⚠️</div><div style="color:#ff6b6b;">${data.error}</div>`;
+                updateStatus('Retry failed', '');
+            }
+        } catch (err) {
+            console.error("Retry error:", err);
+        }
+    }
+</script>
+</body>
+</html>
