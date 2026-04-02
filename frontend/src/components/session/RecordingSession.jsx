@@ -37,10 +37,6 @@ export default function RecordingSession() {
   const timerInterval = useRef(null);
   const transcriptEndRef = useRef(null);
 
-  // Audio Monitoring State
-  const [audioLevel, setAudioLevel] = useState(0);
-  const [showLowAudioToast, setShowLowAudioToast] = useState(false);
-
   // Manual Medication State
   const [showMedModal, setShowMedModal] = useState(false);
   const [editingMedIndex, setEditingMedIndex] = useState(null);
@@ -224,13 +220,20 @@ export default function RecordingSession() {
     }
   }, [patientName, patientId, user]);
 
-  const handleFinish = () => {
-    setSessionCompleted(true);
-    setStatus('Session Completed');
-    setResult(null);
-    setPatientName('');
-    setPatientId('');
-    setTimeout(() => setSessionCompleted(false), 3000);
+  const handleFinish = async () => {
+    try {
+      await axios.post(`${API_URL}/prescriptions/${result.prescription.id}/finalize`, {
+        modifiedMedications: result.medications
+      });
+      setSessionCompleted(true);
+      setStatus('Session Completed');
+      setResult(null);
+      setPatientName('');
+      setPatientId('');
+      setTimeout(() => setSessionCompleted(false), 3000);
+    } catch (err) {
+      console.error('Finalization failed:', err);
+    }
   };
 
   const handleSaveMedication = (e) => {
