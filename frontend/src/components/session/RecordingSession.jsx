@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Mic, Square, FileText, CheckCircle2, Activity, RotateCw, 
-  Volume2, Stethoscope, User, LogOut, ShieldCheck, AlertCircle, 
-  Search, Info, Lock, ArrowRight, X
+  Volume2, Stethoscope, LogOut, AlertCircle, 
+  Info, Lock, X
 } from 'lucide-react';
 import { socket } from '../../services/socket.service';
-import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
@@ -13,21 +12,18 @@ import axios from 'axios';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 export default function RecordingSession() {
-  const { user, logout } = useAuth();
   const navigate = useNavigate();
   
   const [isRecording, setIsRecording] = useState(false);
   const [status, setStatus] = useState('Ready');
   const [timer, setTimer] = useState(0);
   const [transcript, setTranscript] = useState([]);
-  const [result, setResult] = useState(null); // Holds { prescription, medications, reviewNotes, validityCheck }
+  const [result, setResult] = useState(null); 
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [patientName, setPatientName] = useState('');
   const [patientId, setPatientId] = useState('');
   
-  // Signature Modal State
-  const [isSigning, setIsSigning] = useState(false);
   const [sessionCompleted, setSessionCompleted] = useState(false);
   const transcriptRef = useRef([]);
   const lowAudioTimer = useRef(0);
@@ -36,6 +32,10 @@ export default function RecordingSession() {
   const processorRef = useRef(null);
   const timerInterval = useRef(null);
   const transcriptEndRef = useRef(null);
+
+  // Audio Monitoring State
+  const [audioLevel, setAudioLevel] = useState(0);
+  const [showLowAudioToast, setShowLowAudioToast] = useState(false);
 
   // Manual Medication State
   const [showMedModal, setShowMedModal] = useState(false);
@@ -130,15 +130,13 @@ export default function RecordingSession() {
           if (Math.abs(val) > 0.01) hasSignal = true;
         }
         
-        // Calculate volume level for UI (0-100)
         const average = sum / inputData.length;
         const level = Math.min(100, Math.floor(average * 500));
         setAudioLevel(level);
 
-        // Detect consistently low audio
-        if (average < 0.005) { // Threshold for "too quiet"
+        if (average < 0.005) { 
           lowAudioTimer.current += 1;
-          if (lowAudioTimer.current > 40) { // ~5 seconds at 4096 buffer/16k sample
+          if (lowAudioTimer.current > 40) { 
             setShowLowAudioToast(true);
           }
         } else {
@@ -202,15 +200,14 @@ export default function RecordingSession() {
       const res = await axios.post(`${API_URL}/prescriptions/generate`, {
         transcript: fullText,
         patientName,
-        patientId: patientId || 'P-' + Math.random().toString(36).substr(2, 5).toUpperCase(),
-        doctorId: user?.id
+        patientId: patientId || 'P-' + Math.random().toString(36).substr(2, 5).toUpperCase()
       });
       
       setResult(res.data);
       setStatus('Review Ready');
 
       if (res.data.prescription?.diagnosis) {
-        speakText(`Advanced AI review complete. Clinical notes and pharmacological validity check are ready for your signature.`);
+        speakText(`Diagnosis identified: ${res.data.prescription.diagnosis}. Extracting Clinical Data.`);
       }
     } catch (err) {
       console.error('Prescription error:', err);
@@ -218,7 +215,7 @@ export default function RecordingSession() {
     } finally {
       setIsProcessing(false);
     }
-  }, [patientName, patientId, user]);
+  }, [patientName, patientId]);
 
   const handleFinish = async () => {
     try {
@@ -269,14 +266,12 @@ export default function RecordingSession() {
     return `${m}:${s}`;
   };
 
-  const handleLogout = () => {
-    logout();
+  const handleExit = () => {
     navigate('/');
   };
 
   return (
     <div className="flex flex-col h-screen text-[#e0e6ed] bg-[#0a0e27]">
-      {/* Role-Specific Header */}
       <header className="h-[72px] shrink-0 border-b border-white/10 bg-[#0f142d]/80 backdrop-blur-xl px-8 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#00d2d3] to-[#54a0ff] flex items-center justify-center shadow-[0_0_15px_rgba(0,210,211,0.4)]">
@@ -288,18 +283,9 @@ export default function RecordingSession() {
         </div>
         
         <div className="flex items-center gap-6">
-          <div className="hidden md:flex items-center gap-3 bg-white/5 border border-white/10 px-4 py-1.5 rounded-full">
-            <div className="text-right">
-              <p className="text-xs font-bold text-white">Dr. {user?.lastName}</p>
-              <p className="text-[10px] text-[#00d2d3] uppercase tracking-wide">Physician</p>
-            </div>
-            <div className="w-8 h-8 rounded-full bg-[#00d2d3]/20 flex items-center justify-center border border-[#00d2d3]/40">
-              <User className="w-4 h-4 text-[#00d2d3]" />
-            </div>
-          </div>
           <button 
-            onClick={handleLogout}
-            className="p-2 rounded-xl bg-white/5 hover:bg-red-500/10 text-gray-400 hover:text-red-400 transition-all border border-white/5"
+            onClick={handleExit}
+            className="p-2 rounded-xl bg-white/5 hover:bg-gray-500/10 text-gray-400 hover:text-white transition-all border border-white/5"
           >
             <LogOut className="w-5 h-5" />
           </button>
@@ -307,7 +293,6 @@ export default function RecordingSession() {
       </header>
 
       <main className="flex-1 overflow-hidden p-8 flex flex-col gap-6">
-        {/* Success Toast */}
         <AnimatePresence>
           {sessionCompleted && (
             <motion.div 
@@ -334,7 +319,6 @@ export default function RecordingSession() {
           )}
         </AnimatePresence>
 
-        {/* Patient Identity Bar */}
         <div className="flex flex-col md:flex-row gap-4 items-end bg-white/5 p-6 rounded-3xl border border-white/10">
           <div className="flex-1 space-y-2">
             <label className="text-[10px] text-[#00d2d3] font-bold uppercase tracking-widest ml-1">Patient Name</label>
@@ -366,7 +350,6 @@ export default function RecordingSession() {
         </div>
 
         <div className="flex-1 flex flex-col md:flex-row gap-6 min-h-0">
-          {/* Left Panel: Transcript */}
           <div className="flex-1 flex flex-col bg-[#141937]/50 backdrop-blur-xl border border-white/10 rounded-[40px] overflow-hidden shadow-2xl transition-all hover:border-[#00d2d3]/30">
             <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/5">
               <div className="flex items-center gap-3">
@@ -438,7 +421,6 @@ export default function RecordingSession() {
             </div>
           </div>
 
-          {/* Right Panel: Prescription & Verification */}
           <div className="flex-1 flex flex-col bg-[#141937]/50 backdrop-blur-xl border border-white/10 rounded-[40px] overflow-hidden shadow-2xl transition-all hover:border-[#1dd1a1]/30">
             <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/5">
               <h2 className="text-lg font-semibold flex items-center gap-2 text-[#e0e6ed]">
@@ -483,54 +465,53 @@ export default function RecordingSession() {
                     <p className="text-xs text-cyan-200/70">Review and Edit medications if necessary before finalizing the report.</p>
                   </div>
 
-                  {/* DRAFT RX SUMMARY */}
                   <div className="p-6 bg-white/5 rounded-3xl border border-white/5">
                     <h3 className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-black mb-4">Patient Diagnosis</h3>
                     <p className="text-xl font-bold text-white mb-2">{result.prescription.diagnosis}</p>
                     <div className="space-y-4">
-                    <div className="flex justify-between items-center mb-4">
-                      <h3 className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-black">Medications</h3>
-                      <button 
-                        onClick={() => {
-                          setMedForm({ medication_name: '', dosage: '', frequency: 'once_daily', duration_days: 7, instructions: '' });
-                          setEditingMedIndex(null);
-                          setShowMedModal(true);
-                        }}
-                        className="text-[10px] uppercase font-bold text-[#1dd1a1] hover:text-white transition-colors bg-[#1dd1a1]/10 px-3 py-1 rounded-lg border border-[#1dd1a1]/20"
-                      >
-                        + Add Manually
-                      </button>
-                    </div>
-                    {(result.medications || []).map((med, i) => (
-                      <div key={i} className="group flex justify-between items-center p-3 bg-white/5 rounded-xl border border-white/5 hover:border-[#1dd1a1]/30 transition-all">
-                        <div className="flex-1">
-                          <span className="font-bold text-[#1dd1a1] text-sm">{med.medication_name || med.medicationName}</span>
-                          <p className="text-[10px] text-gray-400 mt-0.5">{med.dosage} • {med.frequency}</p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-[10px] font-bold text-gray-500">{med.duration_days || med.durationDays} Days</span>
-                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button 
-                              onClick={() => {
-                                setMedForm(med);
-                                setEditingMedIndex(i);
-                                setShowMedModal(true);
-                              }}
-                              className="p-1.5 rounded-md hover:bg-white/10 text-gray-400 hover:text-blue-400"
-                            >
-                              <Lock className="w-3 h-3" />
-                            </button>
-                            <button 
-                              onClick={() => removeMedication(i)}
-                              className="p-1.5 rounded-md hover:bg-white/10 text-gray-400 hover:text-red-400"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-black">Medications</h3>
+                        <button 
+                          onClick={() => {
+                            setMedForm({ medication_name: '', dosage: '', frequency: 'once_daily', duration_days: 7, instructions: '' });
+                            setEditingMedIndex(null);
+                            setShowMedModal(true);
+                          }}
+                          className="text-[10px] uppercase font-bold text-[#1dd1a1] hover:text-white transition-colors bg-[#1dd1a1]/10 px-3 py-1 rounded-lg border border-[#1dd1a1]/20"
+                        >
+                          + Add Manually
+                        </button>
+                      </div>
+                      {(result.medications || []).map((med, i) => (
+                        <div key={i} className="group flex justify-between items-center p-3 bg-white/5 rounded-xl border border-white/5 hover:border-[#1dd1a1]/30 transition-all">
+                          <div className="flex-1">
+                            <span className="font-bold text-[#1dd1a1] text-sm">{med.medication_name || med.medicationName}</span>
+                            <p className="text-[10px] text-gray-400 mt-0.5">{med.dosage} • {med.frequency}</p>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-[10px] font-bold text-gray-500">{med.duration_days || med.durationDays} Days</span>
+                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button 
+                                onClick={() => {
+                                  setMedForm(med);
+                                  setEditingMedIndex(i);
+                                  setShowMedModal(true);
+                                }}
+                                className="p-1.5 rounded-md hover:bg-white/10 text-gray-400 hover:text-blue-400"
+                              >
+                                <Lock className="w-3 h-3" />
+                              </button>
+                              <button 
+                                onClick={() => removeMedication(i)}
+                                className="p-1.5 rounded-md hover:bg-white/10 text-gray-400 hover:text-red-400"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
                   </div>
                 </motion.div>
               )}
@@ -556,7 +537,6 @@ export default function RecordingSession() {
         </div>
       </main>
 
-      {/* MANUAL MEDICATION MODAL */}
       <AnimatePresence>
         {showMedModal && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
