@@ -28,6 +28,13 @@ const Prescription = sequelize.define('Prescription', {
   additional_notes: DataTypes.TEXT,
   status: { type: DataTypes.ENUM('draft', 'finalized', 'dispensed', 'cancelled'), defaultValue: 'draft' },
   ai_extraction_confidence: DataTypes.FLOAT,
+  
+  // Clinical Review Fields
+  clinical_summary: DataTypes.TEXT,
+  pharmacological_notes: DataTypes.TEXT,
+  is_validated: { type: DataTypes.BOOLEAN, defaultValue: false },
+  doctor_signature: DataTypes.TEXT, // Store as base64 or digital hash
+  signed_at: DataTypes.DATE
 });
 
 const Medication = sequelize.define('Medication', {

@@ -5,6 +5,12 @@ async function generatePrescription(sessionId, patientId, patientName, doctorId,
   // 1. Single Agent Extraction
   const extracted = await geminiService.extractPrescription(transcriptText);
   
+  // 2. Parallel AI Agents Context Generation
+  const [summary, validation] = await Promise.all([
+    geminiService.summarizeClinicalSession(transcriptText, extracted),
+    geminiService.validateMedications(extracted.medications, extracted.diagnosis)
+  ]);
+  
   // Create prescription in database as 'draft'
   const prescription = await Prescription.create({
     session_id: sessionId,
@@ -16,6 +22,11 @@ async function generatePrescription(sessionId, patientId, patientName, doctorId,
     additional_notes: extracted.additionalNotes || '',
     status: 'draft', 
     ai_extraction_confidence: 0.92,
+    
+    // Multi-Agent Outputs
+    clinical_summary: summary,
+    pharmacological_notes: validation.pharmacologicalNotes,
+    is_validated: validation.isValidated
   });
   
   // Create medications
@@ -36,7 +47,12 @@ async function generatePrescription(sessionId, patientId, patientName, doctorId,
     );
   }
 
-  return { prescription, medications };
+  return { 
+    prescription, 
+    medications,
+    reviewNotes: summary,
+    validityCheck: validation.pharmacologicalNotes
+  };
 }
 
 module.exports = { generatePrescription };
